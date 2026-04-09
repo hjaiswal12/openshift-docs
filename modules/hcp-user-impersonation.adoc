@@ -1,0 +1,179 @@
+```asciidoc
+// Module included in the following assemblies:
+//
+// * hosted_control_planes/hcp-authentication-authorization.adoc
+
+:_mod-docs-content-type: PROCEDURE
+[id="hcp-user-impersonation_{context}"]
+= Configuring user impersonation for hosted clusters
+
+User impersonation allows authorized users to act as other users, groups, or service accounts for troubleshooting and administrative purposes in {hcp} clusters. To enable impersonation, you must configure role-based access control (RBAC) with the required permissions.
+
+[IMPORTANT]
+====
+The `ClusterRole` requires wildcard (`"*"`) API group permissions because the {product-title} web console checks impersonation permissions against multiple API group variations. Using a specific API group instead of a wildcard causes the impersonation button in the console UI to remain disabled.
+====
+
+.Prerequisites
+
+* You have a running hosted cluster.
+* You have access to the hosted cluster with `cluster-admin` privileges.
+* You installed the OpenShift CLI (`oc`).
+
+.Procedure
+
+. Create a `ClusterRole` that grants impersonation permissions by applying the following manifest:
++
+[source,yaml]
+----
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: impersonate-role
+rules:
+- apiGroups: ["*"] <1>
+  resources:
+  - users
+  - groups
+  - serviceaccounts
+  verbs:
+  - impersonate
+- apiGroups: ["*"]
+  resources:
+  - userextras
+  verbs:
+  - impersonate
+- apiGroups: ["authorization.k8s.io"]
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+----
+<1> The wildcard API group (`"*"`) is required. The {product-title} web console checks impersonation permissions against multiple API group variations. If you specify a single API group, the console impersonation button remains disabled.
+
+. Create a `ClusterRoleBinding` to bind the `ClusterRole` to a user or group by applying the following manifest:
++
+[source,yaml]
+----
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: impersonate-binding
+subjects:
+- kind: User <1>
+  name: <user_name> <2>
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: impersonate-role
+  apiGroup: rbac.authorization.k8s.io
+----
+<1> Specify `User`, `Group`, or `ServiceAccount` depending on the subject type.
+<2> Replace `<user_name>` with the name of the user, group, or service account to grant impersonation permissions.
+
+.Verification
+
+. Verify the current user identity:
++
+[source,terminal]
+----
+$ oc whoami
+----
+
+. Test impersonation of another user:
++
+[source,terminal]
+----
+$ oc whoami --as=<user_name>
+----
+
+. Validate system administrator impersonation:
++
+[source,terminal]
+----
+$ oc whoami --as=system:admin
+----
+
+. Verify service account impersonation:
++
+[source,terminal]
+----
+$ oc whoami --as=system:serviceaccount:default:default
+----
+
+. Test access to projects as the impersonated user:
++
+[source,terminal]
+----
+$ oc get projects --as=<user_name>
+----
+
+. Validate pod visibility in a namespace as the impersonated user:
++
+[source,terminal]
+----
+$ oc get pods --as=<user_name> -n default
+----
+
+. Check access to all resources as the impersonated user:
++
+[source,terminal]
+----
+$ oc get all --as=<user_name> -n default
+----
+
+. Verify specific permissions of the impersonated user:
++
+[source,terminal]
+----
+$ oc auth can-i get pods --as=<user_name> -n default
+----
+
+. Test node visibility as the impersonated user:
++
+[source,terminal]
+----
+$ oc get nodes --as=<user_name>
+----
+
+. Validate group-based impersonation:
++
+[source,terminal]
+----
+$ oc get projects --as-group=<group_name>
+----
+
+. Verify group membership and details:
++
+[source,terminal]
+----
+$ oc get group <group_name>
+----
+```
+
+## 4. Update the Assembly File
+
+Edit the file:
+
+```
+hosted_control_planes/hcp-authentication-authorization.adoc
+```
+
+Add the following include line **after** the `hcp-configuring-oauth-console.adoc` include and **before** the `[role="_additional-resources"]` block:
+
+```asciidoc
+include::modules/hcp-user-impersonation.adoc[leveloffset=+1]
+```
+
+The updated file should look like:
+
+```asciidoc
+include::modules/hcp-configuring-oauth.adoc[leveloffset=+1]
+
+include::modules/hcp-configuring-oauth-console.adoc[leveloffset=+1]
+
+include::modules/hcp-user-impersonation.adoc[leveloffset=+1]
+
+[role="_additional-resources"]
+.Additional resources
+```
